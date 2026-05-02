@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum HiringStatus {
+  actively_hiring
+  selective
+  freeze
+  unknown
+}
+
+model Gcc {
+  id                     String          @id
+  parentCompany          String
+  hqCountry              String
+  yearEstablishedInIndia Int
+  totalHeadcount         Int
+  services               String[]
+  techStack              String[]
+  hiringStatus           HiringStatus    @default(unknown)
+  website                String?
+  notes                  String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  locations              IndiaLocation[]
+  leaders                Leader[]
+
+  @@index([hqCountry])
+  @@index([hiringStatus])
+}
+
+model IndiaLocation {
+  id        String  @id @default(cuid())
+  gccId     String
+  city      String
+  area      String?
+  lat       Float
+  lng       Float
+  headcount Int?
+
+  gcc       Gcc     @relation(fields: [gccId], references: [id], onDelete: Cascade)
+
+  @@index([gccId])
+  @@index([city])
+}
+
+model Leader {
+  id    String @id @default(cuid())
+  gccId String
+  name  String
+  title String
+
+  gcc   Gcc    @relation(fields: [gccId], references: [id], onDelete: Cascade)
+
+  @@index([gccId])
+}
