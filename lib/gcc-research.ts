@@ -56,50 +56,19 @@ function slugify(s: string): string {
 }
 
 function buildPrompt(startYear: number, endYear: number): string {
-  return `You are researching India's Global Capability Center (GCC) ecosystem, focused on Bengaluru.
+  return `Find 50 GCCs (captive centers of foreign multinationals) with a Bengaluru office, established in India between ${startYear} and ${endYear}. Reject anything Indian-owned or outside the year window.
 
-Find the **100 most recently established GCCs in Bengaluru** that were set up between **${startYear}** and **${endYear}** inclusive. A GCC is a captive offshore center of a foreign-headquartered multinational (NOT an Indian outsourcer like TCS/Infosys/Wipro, NOT a domestic Indian company). EVERY company you return must have at least one office in Bengaluru — that is the entire point of this list.
+Use web_search sparingly (you have a small budget). Use your knowledge first; search only to verify recent launches.
 
-USE THE web_search TOOL liberally — search for "GCC Bengaluru 2024 launch", "captive center Bangalore 2025", "global capability center new Bengaluru 2026", "[Company] opens Bangalore office", NASSCOM Bangalore reports, Economic Times Tech, Moneycontrol, GCCXchange announcements. Cite at least one source per company in the notes field.
+Each entry must have at least one location with city = "Bengaluru". city must come from this list: ${ALLOWED_CITIES.join(", ")}. area should be a real Bengaluru district (Whitefield, Electronic City, Outer Ring Road, Manyata, Koramangala, etc.) or omit.
 
-CONSTRAINTS:
-- yearEstablishedInIndia must be in [${startYear}, ${endYear}]. Reject candidates outside this window.
-- Every entry MUST have at least one indiaLocation with city = "Bengaluru". Reject candidates without a confirmed Bengaluru office.
-- The city field for each location MUST be picked from this exact list (case-sensitive):
-  ${ALLOWED_CITIES.join(", ")}
-- area is free-form (e.g., "Whitefield", "Electronic City", "Manyata Tech Park", "Outer Ring Road") but MUST be a real, named tech park or district within the chosen city. Omit if uncertain.
-- totalHeadcount: integer; if reported as "500+" use 500; if a range "1000-1500" use the midpoint 1250; if unknown use a conservative estimate. Headcount is the India total, not Bengaluru-only.
-- hiringStatus: pick "actively_hiring" if recent job posts exist, "selective" if some openings, "freeze" if confirmed pause, otherwise "unknown".
-
-OUTPUT FORMAT:
-Return a SINGLE JSON code block (markdown fence with the language tag json) containing exactly this shape:
+Output ONLY a single JSON code block, no prose:
 
 \`\`\`json
-{
-  "gccs": [
-    {
-      "parentCompany": "string (e.g. 'Stripe')",
-      "hqCountry": "string (e.g. 'USA')",
-      "yearEstablishedInIndia": 2024,
-      "totalHeadcount": 800,
-      "indiaLocations": [
-        { "city": "Bengaluru", "area": "Whitefield", "headcount": 800 }
-      ],
-      "servicesFunctions": ["Payments R&D", "Risk", "Engineering"],
-      "leadership": [{ "name": "Jane Doe", "title": "MD India" }],
-      "techStack": ["Ruby", "Go", "AWS"],
-      "hiringStatus": "actively_hiring",
-      "website": "https://stripe.com",
-      "notes": "Sources: ETtech 2024-03-12, NASSCOM GCC Report 2024."
-    }
-  ]
-}
+{"gccs":[{"parentCompany":"Stripe","hqCountry":"USA","yearEstablishedInIndia":2024,"totalHeadcount":800,"indiaLocations":[{"city":"Bengaluru","area":"Whitefield","headcount":800}],"servicesFunctions":["Payments R&D"],"leadership":[{"name":"Jane Doe","title":"MD India"}],"techStack":["Ruby","Go"],"hiringStatus":"actively_hiring","website":"https://stripe.com","notes":"Source: ETtech 2024."}]}
 \`\`\`
 
-REQUIREMENTS:
-- Aim for 100 entries; never fabricate. Better to return 60 verified than 100 with hallucinations.
-- Sort newest first (highest yearEstablishedInIndia first).
-- Output ONLY the JSON code block. No prose before or after.`;
+hiringStatus is one of: actively_hiring, selective, freeze, unknown. Sort newest first. Better fewer real entries than fabricated ones.`;
 }
 
 function extractJsonFromText(text: string): unknown {
@@ -129,7 +98,7 @@ export async function researchAndUpsertGccs(): Promise<ResearchSummary> {
     const result = await generateText({
       model: anthropic("claude-sonnet-4-6"),
       tools: {
-        web_search: anthropic.tools.webSearch_20250305({ maxUses: 30 }),
+        web_search: anthropic.tools.webSearch_20250305({ maxUses: 5 }),
       },
       prompt: buildPrompt(startYear, endYear),
       providerOptions: {
