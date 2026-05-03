@@ -56,19 +56,19 @@ function slugify(s: string): string {
 }
 
 function buildPrompt(startYear: number, endYear: number): string {
-  return `You are researching India's Global Capability Center (GCC) ecosystem.
+  return `You are researching India's Global Capability Center (GCC) ecosystem, focused on Bengaluru.
 
-Find the **100 most recently established GCCs in India** that were set up between **${startYear}** and **${endYear}** inclusive. A GCC is a captive offshore center of a foreign-headquartered multinational (NOT an Indian outsourcer like TCS/Infosys/Wipro, NOT a domestic Indian company).
+Find the **100 most recently established GCCs in Bengaluru** that were set up between **${startYear}** and **${endYear}** inclusive. A GCC is a captive offshore center of a foreign-headquartered multinational (NOT an Indian outsourcer like TCS/Infosys/Wipro, NOT a domestic Indian company). EVERY company you return must have at least one office in Bengaluru — that is the entire point of this list.
 
-USE THE web_search TOOL liberally — search for "GCC India 2024 launch", "captive center India 2025", "global capability center new 2026", "[Company] opens India center", NASSCOM reports, Economic Times Tech, Moneycontrol, GCCXchange announcements. Cite at least one source per company in the notes field.
+USE THE web_search TOOL liberally — search for "GCC Bengaluru 2024 launch", "captive center Bangalore 2025", "global capability center new Bengaluru 2026", "[Company] opens Bangalore office", NASSCOM Bangalore reports, Economic Times Tech, Moneycontrol, GCCXchange announcements. Cite at least one source per company in the notes field.
 
 CONSTRAINTS:
 - yearEstablishedInIndia must be in [${startYear}, ${endYear}]. Reject candidates outside this window.
+- Every entry MUST have at least one indiaLocation with city = "Bengaluru". Reject candidates without a confirmed Bengaluru office.
 - The city field for each location MUST be picked from this exact list (case-sensitive):
   ${ALLOWED_CITIES.join(", ")}
-- area is free-form (e.g., "HITEC City", "Whitefield") but MUST be a real, named tech park or district within the chosen city. Omit if uncertain.
-- Each GCC must have at least one indiaLocation.
-- totalHeadcount: integer; if reported as "500+" use 500; if a range "1000-1500" use the midpoint 1250; if unknown use a conservative estimate.
+- area is free-form (e.g., "Whitefield", "Electronic City", "Manyata Tech Park", "Outer Ring Road") but MUST be a real, named tech park or district within the chosen city. Omit if uncertain.
+- totalHeadcount: integer; if reported as "500+" use 500; if a range "1000-1500" use the midpoint 1250; if unknown use a conservative estimate. Headcount is the India total, not Bengaluru-only.
 - hiringStatus: pick "actively_hiring" if recent job posts exist, "selective" if some openings, "freeze" if confirmed pause, otherwise "unknown".
 
 OUTPUT FORMAT:
@@ -200,6 +200,16 @@ export async function researchAndUpsertGccs(): Promise<ResearchSummary> {
         reason: `no resolvable locations from cities: ${c.indiaLocations
           .map((l) => l.city)
           .join(", ")}`,
+      });
+      continue;
+    }
+
+    if (!resolvedLocations.some((l) => l.city === "Bengaluru")) {
+      summary.rejectedRows.push({
+        parentCompany: c.parentCompany,
+        reason: `no Bengaluru location (got ${resolvedLocations
+          .map((l) => l.city)
+          .join(", ")})`,
       });
       continue;
     }
