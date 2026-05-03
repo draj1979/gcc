@@ -4,12 +4,28 @@ import { z } from "zod";
 import { ALLOWED_CITIES, lookupCoords } from "./cities";
 import { prisma } from "./prisma";
 
-const HiringStatusEnum = z.enum([
-  "actively_hiring",
-  "selective",
-  "freeze",
-  "unknown",
-]);
+const VALID_HIRING = ["actively_hiring", "selective", "freeze", "unknown"] as const;
+type HiringStatus = (typeof VALID_HIRING)[number];
+
+const HiringStatusEnum = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v): HiringStatus => {
+    if (v == null) return "unknown";
+    const normalized = String(v)
+      .toLowerCase()
+      .trim()
+      .replace(/[\s-]+/g, "_");
+    if ((VALID_HIRING as readonly string[]).includes(normalized)) {
+      return normalized as HiringStatus;
+    }
+    if (normalized.includes("hiring") || normalized.includes("active"))
+      return "actively_hiring";
+    if (normalized.includes("freeze") || normalized.includes("paused"))
+      return "freeze";
+    if (normalized.includes("select") || normalized.includes("limited"))
+      return "selective";
+    return "unknown";
+  });
 
 const ResearchedLocationSchema = z.object({
   city: z.string(),
@@ -32,7 +48,7 @@ const ResearchedGccSchema = z.object({
 });
 
 const ResearchOutputSchema = z.object({
-  gccs: z.array(ResearchedGccSchema),
+  gccs: z.array(z.unknown()),
 });
 
 export type ResearchSummary = {
@@ -115,19 +131,36 @@ export async function researchAndUpsertGccs(): Promise<ResearchSummary> {
     return summary;
   }
 
-  const validation = ResearchOutputSchema.safeParse(parsed);
-  if (!validation.success) {
+  const outer = ResearchOutputSchema.safeParse(parsed);
+  if (!outer.success) {
     summary.errors.push(
-      `Schema validation failed: ${validation.error.issues
-        .slice(0, 5)
+      `Outer schema invalid: ${outer.error.issues
+        .slice(0, 3)
         .map((i) => `${i.path.join(".")}: ${i.message}`)
         .join("; ")}`,
     );
     return summary;
   }
 
-  const candidates = validation.data.gccs;
-  summary.totalReturned = candidates.length;
+  summary.totalReturned = outer.data.gccs.length;
+
+  const candidates: z.infer<typeof ResearchedGccSchema>[] = [];
+  for (let i = 0; i < outer.data.gccs.length; i++) {
+    const row = ResearchedGccSchema.safeParse(outer.data.gccs[i]);
+    if (row.success) {
+      candidates.push(row.data);
+    } else {
+      const raw = outer.data.gccs[i] as { parentCompany?: unknown };
+      summary.rejectedRows.push({
+        parentCompany:
+          typeof raw.parentCompany === "string" ? raw.parentCompany : `row ${i}`,
+        reason: `schema: ${row.error.issues
+          .slice(0, 2)
+          .map((iss) => `${iss.path.join(".")}: ${iss.message}`)
+          .join("; ")}`,
+      });
+    }
+  }
 
   const upsertedIds = new Set<string>();
 
