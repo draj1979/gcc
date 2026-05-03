@@ -96,14 +96,8 @@ export async function researchAndUpsertGccs(): Promise<ResearchSummary> {
   let researchText: string;
   try {
     const result = await generateText({
-      model: anthropic("claude-sonnet-4-6"),
-      tools: {
-        web_search: anthropic.tools.webSearch_20250305({ maxUses: 5 }),
-      },
+      model: anthropic("claude-haiku-4-5"),
       prompt: buildPrompt(startYear, endYear),
-      providerOptions: {
-        anthropic: { effort: "high" },
-      },
     });
     researchText = result.text;
   } catch (e) {
